@@ -1127,6 +1127,7 @@ function particles(x,y,kind,n,col){ if(!G.settings.particles)return;
 /* ══════════════════════════════════════════════════════════════
    INPUT — keyboard, joystick, interact button
    ══════════════════════════════════════════════════════════════ */
+let touchUI=false; // true on touch devices — enables the on-screen trap fallback
 const Input={keys:{},joy:{x:0,y:0},joyOn:false,joyId:null,
  init(){
   addEventListener('keydown',e=>{
@@ -1134,6 +1135,7 @@ const Input={keys:{},joy:{x:0,y:0},joyOn:false,joyId:null,
     this.keys[e.key.toLowerCase()]=true;
     if(e.repeat)return; // a held key must never re-trigger actions (prevents panel thrash)
     if(e.key.toLowerCase()==='e'&&G.started)tryInteract();
+    if(e.key.toLowerCase()==='t'&&G.started)trySetTrap(); // dedicated trap key — never overlaps E
     if(e.key==='Escape')UI.closeTop();
   });
   addEventListener('keyup',e=>this.keys[e.key.toLowerCase()]=false);
@@ -1156,8 +1158,8 @@ const Input={keys:{},joy:{x:0,y:0},joyOn:false,joyId:null,
     if(Math.hypot(dx,dy)<40)return;
     this.tapMove={x:dx/Math.hypot(dx,dy),y:dy/Math.hypot(dx,dy),t:.35};
   });
-  if(matchMedia('(pointer:coarse)').matches)document.body.classList.add('touch');
-  addEventListener('touchstart',()=>document.body.classList.add('touch'),{once:true});
+  if(matchMedia('(pointer:coarse)').matches){document.body.classList.add('touch');touchUI=true;}
+  addEventListener('touchstart',()=>{document.body.classList.add('touch');touchUI=true;},{once:true});
   // the big gold interact button (mobile) — fires the same action as the E key
   const ab=$('actBtn');
   ab.addEventListener('pointerdown',e=>{ e.preventDefault(); if(G.started)tryInteract(); });
@@ -1720,9 +1722,10 @@ function findInteract(){
         G.stats.clearHint=1;
         toast('That is blocking the way. The stall\'s Gear tab sells tools to clear trees, rocks and flowers.','good',5600);
         break; } } }
-  // out in the wild with nothing else around: set a snare right where you stand
-  if(!best){ const bio=World.biomeAt(P.x,P.y);
-    if(bio!=='ranch')best={x:P.x,y:P.y,label:'Set Trap',fn:trySetTrap,sub:G.trapCount+' snare'+(G.trapCount===1?'':'s')+' left · needs bait'}; }
+  // on touch devices only: with nothing else nearby, the action button sets a snare
+  // (keyboard players use the dedicated T key, so E never gets hijacked)
+  if(!best&&touchUI){ const bio=World.biomeAt(P.x,P.y);
+    if(bio!=='ranch')best={x:P.x,y:P.y,label:'Set Trap',fn:trySetTrap,sub:G.trapCount+' snare'+(G.trapCount===1?'':'s')+' left · or press T'}; }
   return best;
 }
 /* ══════════ THE KEEPER'S TALE — story engine, family, farm, meals ══════════ */
@@ -2529,6 +2532,7 @@ const UI={
   helpPanel(){ const body=el('div');
    body.innerHTML='<div class="kv"><span>Move</span><span>WASD / arrows / joystick / tap-drag</span></div>'+
    '<div class="kv"><span>Interact</span><span>E key or the big gold button</span></div>'+
+   '<div class="kv"><span>Set a trap</span><span>T key (on touch, the gold button in open wild)</span></div>'+
    '<div class="kv"><span>Close panels</span><span>Esc or ×</span></div>'+
    '<div class="hint">The loop: explore → gather snacks & eggs → hatch Pips → feed & pet them → fuse Adults at the Spring → match Pips to wanderers → earn coins → unlock new lands. Radiant Pips (stage 4) can weave Prismaw eggs!</div>'+
    '<div class="hint"><b>Filling the pen:</b> 1) Hatch eggs at the Incubator. 2) <b>The Starlight Net</b> — a relic buried somewhere in the far corners of the Ember Crags. Find it, then run up to wild land Pips and throw the net to catch them on the spot (rarer Pips are harder to catch). 3) <b>Snares</b>: set one with bait and return later. 4) <b>Fishing</b> for water Pips with the boat rod. Water Pips can never be netted — only fished.</div>'+
@@ -3732,7 +3736,7 @@ const DevSys={ active:false,backup:null,isOpen:false,
    if(!document.getElementById('devBg')){
      const bg=el('div'); bg.id='devBg'; bg.addEventListener('click',()=>DevSys.closePanel());
      const p=el('div','panel'); p.id='devPanel';
-     p.innerHTML='<div class="panelHead"><h2 class="disp">Grove Console<span class="sub">internal build tools · Ctrl+Alt+G</span></h2><button class="xBtn" data-act="devclose">×</button></div>'+
+     p.innerHTML='<div class="panelHead"><h2 class="disp">Grove Console<span class="sub">internal build tools · Ctrl+Alt+G · or 5 taps on the version line</span></h2><button class="xBtn" data-act="devclose">×</button></div>'+
       '<div class="panelBody">'+
       '<div id="devStatus" class="hint">'+this.defaultStatus()+'</div>'+
       '<div style="display:flex;gap:8px;margin:12px 0;align-items:stretch">'+
@@ -3780,6 +3784,9 @@ World.gen(); World.bakeGround(); initAtmo();
   G.wildPips.push({sp,x:pt[0]*TILE,y:pt[1]*TILE,tx:pt[0]*TILE,ty:pt[1]*TILE,area:'meadow',t:rand(0,9),wt:0,flip:false}); });
 Input.init();
 DevSys.init();
+// hidden touch entry to the console: five quick taps on the version line (title) or the level chip (in game)
+(function(){let n=0,t0=0;const bump=()=>{const now=Date.now();if(now-t0>2500)n=0;t0=now;if(++n>=5){n=0;DevSys.openPanel();}};
+ ['titleFoot','repChip'].forEach(id=>{const e=$(id);if(e)e.addEventListener('click',bump);});})();
 /* loading a save from a file (works from the title screen or mid-game) */
 $('saveFile').addEventListener('change',e=>{
   const f=e.target.files&&e.target.files[0]; e.target.value=''; if(!f)return;
