@@ -11,18 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Pipgrove">
 <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='112' fill='%233E9E5C'/><ellipse cx='256' cy='292' rx='118' ry='148' fill='%23FFF7E4'/><circle cx='218' cy='240' r='17' fill='%238BC48A'/><circle cx='298' cy='290' r='13' fill='%238BC48A'/><circle cx='238' cy='348' r='15' fill='%238BC48A'/><path d='M256 120c28-42 72-48 98-42-6 36-36 64-80 64z' fill='%2363C584'/></svg>">
-<!-- Link previews (WhatsApp/Telegram/etc). Upload your converted banner as og-cover.png
-     next to index.html (1200x630 PNG). -->
-<meta property="og:type" content="website">
-<meta property="og:title" content="Pipgrove — Hatch · Raise · Fuse · Befriend">
-<meta property="og:description" content="A cozy creature-collecting adventure. Hatch mysterious eggs, raise and fuse adorable Pips, and build your dream homestead.">
-<meta property="og:image" content="og-cover.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Pipgrove — Hatch · Raise · Fuse · Befriend">
-<meta name="twitter:description" content="A cozy creature-collecting adventure. Hatch, raise, fuse and befriend adorable Pips.">
-<meta name="twitter:image" content="og-cover.png">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -582,8 +571,8 @@ const SELL_PRICES={pellet:4,sunberry:9,pondplum:9,emberfruit:9,boltnut:11,stonen
 /* path-clearing tools — each removes one kind of obstacle for good */
 const TOOLS={
  saw:{n:"Keeper's Saw",d:'Fells trees that block your paths. Yields a few coins, sometimes a Boltnut.',cost:80,mat:{boltnut:4}},
- wedge:{n:'Splitting Wedge',d:'Cracks rocks open and clears the way. Sometimes a Crystal Shard hides inside.',cost:80,mat:{stonenut:4}},
- shears:{n:'Pruning Shears',d:'Snips flowers and bushes, tidying any blocked entry.',cost:50,mat:{sunberry:4}},
+ wedge:{n:'Splitting Wedge',d:'Cracks rocks and ice spikes open. Sometimes a Crystal Shard hides inside.',cost:80,mat:{stonenut:4}},
+ shears:{n:'Pruning Shears',d:'Snips flowers, bushes and mushrooms, tidying any blocked entry.',cost:50,mat:{sunberry:4}},
 };
 /* ═══ Area adventures — every unlocked land has a purpose ═══ */
 const WOOD={n:'Wood',c:'#A9793F'};
@@ -715,6 +704,7 @@ const SaveSys={
      gear:G.gear, trapCount:G.trapCount, traps:G.traps, tools:G.tools,
      boat:G.boat,golem:G.golem,golemWant:G.golemWant,golemDone:G.golemDone,ice:G.ice,iceDone:G.iceDone,lanterns:G.lanterns,
      hasNet:G.hasNet,ring:G.ring,vehicle:G.vehicle,mounted:G.mounted,swing:G.swing,veh:G.veh||{},
+     clearedDecor:G.clearedDecor||[],
      story:G.story,home:G.home,npcs:G.npcs,farm:G.farm,market:G.market,kitchen:G.kitchen,meals:G.meals};
    localStorage.setItem(SAVE_KEY,JSON.stringify(data)); return true; }catch(e){ return false; } },
  load(){ if(!this.available())return null;
@@ -730,6 +720,7 @@ const SaveSys={
      log:G.log.slice(-80),logRead:G.logRead,gear:G.gear,trapCount:G.trapCount,traps:G.traps,tools:G.tools,
      boat:G.boat,golem:G.golem,golemWant:G.golemWant,golemDone:G.golemDone,ice:G.ice,iceDone:G.iceDone,lanterns:G.lanterns,
      hasNet:G.hasNet,ring:G.ring,vehicle:G.vehicle,mounted:G.mounted,swing:G.swing,veh:G.veh||{},
+     clearedDecor:G.clearedDecor||[],
      story:G.story,home:G.home,npcs:G.npcs,farm:G.farm,market:G.market,kitchen:G.kitchen,meals:G.meals}}; },
  download(G){ try{ const blob=new Blob([JSON.stringify(this.payload(G),null,1)],{type:'application/json'});
    const url=URL.createObjectURL(blob); const a=document.createElement('a');
@@ -748,6 +739,9 @@ const World={
  solid:null, tiles:null, ground:null, fence:[], gates:{}, decor:[], nodes:[], spawnPts:{}, water:[],
  penRect:null, buildings:[], lamps:[], flowers:[],
  gen(){
+   // seeded RNG so the world layout is identical on every load — cleared paths stay cleared
+   const wrng=(s=>()=> (s=(s*16807)%2147483647)/2147483647)(987654);
+   const wrandi=(a,b)=>a+Math.floor(wrng()*(b-a+1));
    this.solid=new Uint8Array(MAP_W*MAP_H); this.tiles=new Uint8Array(MAP_W*MAP_H); // 0 grass
    const set=(x,y,v)=>{if(x>=0&&y>=0&&x<MAP_W&&y<MAP_H)this.tiles[y*MAP_W+x]=v;};
    const solid=(x,y)=>{if(x>=0&&y>=0&&x<MAP_W&&y<MAP_H)this.solid[y*MAP_W+x]=1;};
@@ -808,12 +802,12 @@ const World={
    // trees / rocks / spikes
    const tryDecor=(kind,tiles,n)=>{let tries=0,placed=0;
      while(placed<n&&tries<900){tries++;
-       const x=randi(2,MAP_W-3),y=randi(2,MAP_H-3);
+       const x=wrandi(2,MAP_W-3),y=wrandi(2,MAP_H-3);
        if(!tiles.includes(this.tiles[y*MAP_W+x]))continue;
        if(this.solid[y*MAP_W+x])continue;
        if(dist2(x*TILE,y*TILE,32*TILE,25*TILE)<(7*TILE)*(7*TILE))continue; // keep ranch clear
        if(inCorr(x,y)||[this.tiles[(y-1)*MAP_W+x],this.tiles[(y+1)*MAP_W+x]].includes(7))continue;
-       this.decor.push({kind,x:x*TILE+18,y:y*TILE+20,r:kind==='tree'?15:12,sway:rand(0,6)});
+       this.decor.push({kind,x:x*TILE+18,y:y*TILE+20,r:kind==='tree'?15:12,sway:wrng()*6});
        solid(x,y); placed++;
      }};
     /* open, readable landscape — decoration stays well clear of travel paths */
@@ -910,7 +904,7 @@ const World={
    });
    // static decor (rocks & flowers are drawn live in the render loop so tools can clear them)
    this.decor.forEach(d=>{
-     if(d.kind==='rock'||d.kind==='flower'||d.kind==='bushD')return; // drawn live so tools can clear them
+     if(d.kind==='rock'||d.kind==='flower'||d.kind==='bushD'||d.kind==='spike'||d.kind==='shroom')return; // drawn live so tools can clear them
      g.save(); g.translate(d.x,d.y);
      if(d.kind==='flower'){ g.fillStyle=pick(['#FF7096','#FFC53D','#FF9EC4','#B8E05A']);
        for(let k=0;k<5;k++){g.beginPath();g.arc(Math.cos(k*1.26)*5,Math.sin(k*1.26)*5,4,0,7);g.fill();}
@@ -1073,8 +1067,8 @@ const G={
  tools:{saw:false,wedge:false,shears:false},
  boat:false, boatX:0, boatY:0, golem:0, golemWant:null, golemDone:false, ice:0, iceDone:false, lanterns:false, simon:null,
  kbuff:null, hasNet:false, netThrow:null, netHint:0,
- ring:false, vehicle:null, mounted:false, swing:false,
- story:{done:[]}, home:0, npcs:{rosa:0,son:0,daughter:0}, npcList:[],
+   ring:false, vehicle:null, mounted:false, swing:false, clearedDecor:[],
+   story:{done:[]}, home:0, npcs:{rosa:0,son:0,daughter:0}, npcList:[],
  farm:{plots:[null,null,null,null,null,null],harvests:0,open:false,giftT:0},
  market:{built:false,sold:0}, kitchen:{built:false}, meals:{},
  settings:{vol:.6,muted:false,ambient:false,particles:true},
@@ -1715,9 +1709,9 @@ function findInteract(){
   if(G.areas.gloom&&!G.lanterns)consider(LANTERNS.x*TILE+18,LANTERNS.y*TILE+18,'Shadow Lanterns',openSimon,'repeat the light');
   // clearable obstacles — trees, rocks and flowers that block the way
   const hasTool=G.tools.saw||G.tools.wedge||G.tools.shears;
-  World.decor.forEach(d=>{ if(d.kind!=='tree'&&d.kind!=='rock'&&d.kind!=='flower'&&d.kind!=='bushD')return;
-    const verb=d.kind==='tree'?'Chop':d.kind==='rock'?'Split':'Prune';
-    const tool=d.kind==='tree'?'saw':d.kind==='rock'?'wedge':'shears';
+  World.decor.forEach(d=>{ if(d.kind!=='tree'&&d.kind!=='rock'&&d.kind!=='flower'&&d.kind!=='bushD'&&d.kind!=='spike'&&d.kind!=='shroom')return;
+    const verb=d.kind==='tree'?'Chop':(d.kind==='rock'||d.kind==='spike')?'Split':'Prune';
+    const tool=d.kind==='tree'?'saw':(d.kind==='rock'||d.kind==='spike')?'wedge':'shears';
     consider(d.x,d.y,verb,()=>clearDecor(d),G.tools[tool]?TOOLS[tool].n:'needs '+TOOLS[tool].n); });
   // one-time nudge when an obstacle is in the way and no tool exists yet
   if(!G.stats.clearHint&&!hasTool&&G.started){
@@ -1893,25 +1887,31 @@ function talkNpc(n){
 }
 /* clear an obstacle with the right tool; frees the tile and yields a little */
 function clearDecor(d){
-  const tool=d.kind==='tree'?'saw':d.kind==='rock'?'wedge':'shears';
+  const tool=d.kind==='tree'?'saw':(d.kind==='rock'||d.kind==='spike')?'wedge':'shears';
   if(!G.tools[tool]){ toast('You need the '+TOOLS[tool].n+' for that — craft it at the stall (Gear tab).','warn'); AudioSys.deny(); return; }
   const i=World.decor.indexOf(d); if(i<0)return;
   World.decor.splice(i,1);
   const tx=Math.floor(d.x/TILE), ty=Math.floor(d.y/TILE);
   if(tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H)World.solid[ty*MAP_W+tx]=0;
+  G.clearedDecor=G.clearedDecor||[]; const ck=tx+','+ty;
+  if(!G.clearedDecor.includes(ck))G.clearedDecor.push(ck);
   G.stats.cleared=(G.stats.cleared||0)+1;
-  let extra='', col=d.kind==='rock'?'#C4B4A2':d.kind==='tree'?'#5FA845':'#FF7096';
+  let extra='', col=d.kind==='rock'?'#C4B4A2':d.kind==='tree'?'#5FA845':d.kind==='spike'?'#BFE9F5':d.kind==='shroom'?'#9B6BD6':'#FF7096';
   if(d.kind==='tree'){ G.coins+=6; Helpers.addItem('wood',1);
     if(chance(.5)){Helpers.addItem('boltnut',1); extra=' +1 Wood +1 Boltnut';} else extra=' +1 Wood';
     logEvent('Felled a tree with the Saw — it yielded Wood.'); }
   else if(d.kind==='rock'){ G.coins+=6; if(chance(.3)){G.shards++; extra=' +1 Crystal Shard';}
     logEvent('Split a rock with the Wedge'+(extra?' — '+extra.slice(3)+' inside!':'. The way is open.')); }
+  else if(d.kind==='spike'){ G.coins+=4; if(chance(.3)){G.shards++; extra=' +1 Crystal Shard';}
+    logEvent('Cracked an ice spike with the Wedge'+(extra?' — '+extra.slice(3)+' glinted inside!':'.')); }
+  else if(d.kind==='shroom'){ G.coins+=3; if(chance(.4)){Helpers.addItem('gloomcap',1); extra=' +1 Gloomcap';}
+    logEvent('Snipped a glowing Gloomcap for the basket.'); }
   else if(d.kind==='bushD'){ G.coins+=3; if(chance(.4)){Helpers.addItem('sunberry',1); extra=' +1 Sunberry';}
     logEvent('Pruned a bush — ripe berries were hiding inside.'); }
   else { G.coins+=2; logEvent('Pruned some flowers and tidied the path.'); }
-  AudioSys.gather(); particles(d.x,d.y,d.kind==='rock'?'spark':'leaf',12,col);
-  const cn=d.kind==='flower'?2:d.kind==='bushD'?3:6;
-  toast((d.kind==='tree'?'Timber!':d.kind==='rock'?'Crack!':'Snip!')+' Path cleared. +'+cn+' coins'+extra,'good');
+  AudioSys.gather(); particles(d.x,d.y,(d.kind==='rock'||d.kind==='spike')?'spark':'leaf',12,col);
+  const cn={flower:2,bushD:3,spike:4,shroom:3}[d.kind]||6;
+  toast((d.kind==='tree'?'Timber!':(d.kind==='rock'||d.kind==='spike')?'Crack!':'Snip!')+' Path cleared. +'+cn+' coins'+extra,'good');
   UI.hud(); checkMissions();
 }
 function tryInteract(){ if(UI.modalOpen||DevSys.isOpen)return;
@@ -2329,7 +2329,7 @@ const UI={
      card.innerHTML=iconBox('#8C5A2F',IC.trap)+'<div class="nm">Snare Trap</div><div class="sub">×'+G.trapCount+' · set with bait in the wild</div>';
      grid.appendChild(card); }
    Object.keys(TOOLS).forEach(tk=>{ if(G.tools[tk]){any=true; const card=el('div','card'); card.style.cursor='default';
-     card.innerHTML=iconBox('#B9A99A',IC[tk])+'<div class="nm">'+TOOLS[tk].n+'</div><div class="sub">clears '+(tk==='saw'?'trees':tk==='wedge'?'rocks':'flowers & bushes')+'</div>';
+     card.innerHTML=iconBox('#B9A99A',IC[tk])+'<div class="nm">'+TOOLS[tk].n+'</div><div class="sub">clears '+(tk==='saw'?'trees':tk==='wedge'?'rocks & ice spikes':'flowers, bushes & mushrooms')+'</div>';
      grid.appendChild(card); } });
    if(G.inv.wood){any=true; const card=el('div','card'); card.style.cursor='default';
      card.innerHTML=iconBox('#A9793F','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 8h16M4 12h16M4 16h16"/></svg>')+'<div class="nm">Wood</div><div class="sub">×'+G.inv.wood+' · saw trees for more</div>';
@@ -2538,7 +2538,7 @@ const UI={
    '<div class="hint"><b>Saves:</b> everything autosaves on this device. In Settings you can download your grove as a file and load it on any other device.</div>'+
    '<div class="hint"><b>The Keeper\'s Tale:</b> your life grows as you play — build a cottage above the pen, and travelers, love, a farm, a son with his market and a daughter with her kitchen will follow. Talk to your family, watch the homestead change, and follow the chapters in the Quests panel. Farm → market → kitchen → creature progress all feed each other.</div>'+
    '<div class="hint"><b>Trading & cooking:</b> walk right up to PIPKIN\'S MARKET to sell goods and buy stock, or to WILLA\'S KITCHEN to cook — the gold button opens each one. Talking to Pipkin or Willa works too.</div>'+
-   '<div class="hint"><b>Blocked paths?</b> Craft the Keeper\'s Saw (trees), Splitting Wedge (rocks) or Pruning Shears (flowers & bushes) at the stall\'s Gear tab. Once owned, walk up to the obstacle and press Chop / Split / Prune — the tile opens for good, and you earn a little for the work.</div>'+
+   '<div class="hint"><b>Blocked paths?</b> Craft the Keeper\'s Saw (trees), Splitting Wedge (rocks & ice spikes) or Pruning Shears (flowers, bushes & mushrooms) at the stall\'s Gear tab. Once owned, walk up to the obstacle and press Chop / Split / Prune — the tile opens for good, and you earn a little for the work.</div>'+
    '<div class="hint">Tips: matching-element snacks give double growth · happiness above 60 unlocks Radiant growth · loans return your Pip with a gift · fusions can mutate into Chroma Pips.</div>';
    return this.panel('How to Play','a keeper\'s handbook',body);
  },
@@ -2738,7 +2738,7 @@ function freshState(){
    tools:{saw:false,wedge:false,shears:false},
    boat:false,boatX:DOCK.x*TILE+18,boatY:DOCK.y*TILE+20,golem:0,golemWant:null,golemDone:false,ice:0,iceDone:false,lanterns:false,simon:null,
    hasNet:false,netThrow:null,netHint:0,
-   ring:false,vehicle:null,mounted:false,swing:false,
+   ring:false,vehicle:null,mounted:false,swing:false,clearedDecor:[],
    story:{done:[]},home:0,npcs:{rosa:0,son:0,daughter:0},npcList:[],
    farm:{plots:[null,null,null,null,null,null],harvests:0,open:false,giftT:0},
    market:{built:false,sold:0},kitchen:{built:false},meals:{}});
@@ -2779,6 +2779,7 @@ function applySave(d){
   G.hasNet=!!d.hasNet; G.netThrow=null; G.netHint=G.hasNet?1:0;
   G.ring=!!d.ring; G.vehicle=d.vehicle||null; G.mounted=!!d.mounted&&!!G.vehicle; G.swing=!!d.swing;
   G.veh=d.veh||{}; if(G.vehicle&&!G.veh[G.vehicle])G.veh[G.vehicle]=true;
+  G.clearedDecor=Array.isArray(d.clearedDecor)?d.clearedDecor:[];
   G.golem=d.golem||0; G.golemWant=d.golemWant||null; G.golemDone=!!d.golemDone;
   G.ice=d.ice||0; G.iceDone=!!d.iceDone; G.lanterns=!!d.lanterns; G.simon=null;
   G.story={done:Array.isArray(d.story&&d.story.done)?d.story.done:[]};
@@ -2867,6 +2868,18 @@ function drawBushD(c,x,y){ c.save(); c.translate(x,y);
   c.fillStyle='rgba(0,0,0,.12)'; c.beginPath(); c.ellipse(0,10,15,5,0,0,7); c.fill();
   c.fillStyle='#4E9A52'; dot(c,0,0,13); dot(c,-10,4,9); dot(c,10,4,9);
   c.fillStyle='#63B568'; dot(c,-4,-5,7);
+  c.restore(); }
+function drawSpikeD(c,x,y){ c.save(); c.translate(x,y);
+  c.fillStyle='rgba(0,0,0,.1)'; c.beginPath(); c.ellipse(0,10,12,4,0,0,7); c.fill();
+  c.fillStyle='#DFF4FA'; c.beginPath(); c.moveTo(-10,10); c.lineTo(-3,-16); c.lineTo(3,10); c.closePath(); c.fill();
+  c.fillStyle='#BFE3EE'; c.beginPath(); c.moveTo(2,10); c.lineTo(8,-8); c.lineTo(13,10); c.closePath(); c.fill();
+  c.fillStyle='rgba(255,255,255,.7)'; dot(c,-4,-6,1.6);
+  c.restore(); }
+function drawShroomD(c,x,y){ c.save(); c.translate(x,y);
+  c.fillStyle='rgba(0,0,0,.1)'; c.beginPath(); c.ellipse(0,9,9,3.5,0,0,7); c.fill();
+  c.fillStyle='#E8E0F5'; c.fillRect(-2,-2,4,10);
+  c.fillStyle='#9B6BD6'; c.beginPath(); c.arc(0,-3,9,Math.PI,0); c.fill();
+  c.fillStyle='#E8E0F5'; dot(c,-3,-6,2); dot(c,4,-5,1.6);
   c.restore(); }
 function drawFlowerD(c,d,t){
   c.save(); c.translate(d.x,d.y); c.rotate(Math.sin(t*1.6+d.sway)*.08);
@@ -3189,6 +3202,8 @@ function render(t){
     if(d.kind==='rock'&&inView(d.x,d.y,48))drawRockD(ctx,d.x,d.y);
     else if(d.kind==='flower'&&inView(d.x,d.y,48))drawFlowerD(ctx,d,t);
     else if(d.kind==='bushD'&&inView(d.x,d.y,48))drawBushD(ctx,d.x,d.y);
+    else if(d.kind==='spike'&&inView(d.x,d.y,48))drawSpikeD(ctx,d.x,d.y);
+    else if(d.kind==='shroom'&&inView(d.x,d.y,48))drawShroomD(ctx,d.x,d.y);
   });
   // ranch flowers/lamps by grove level
   if(G.upgrades.grove>0){ const spots=[[26,22],[38,22],[26,29],[38,29]];
@@ -3747,6 +3762,17 @@ const DevSys={ active:false,backup:null,isOpen:false,
    if(bg)bg.classList.remove('open'); if(p)p.classList.remove('open'); },
 };
 
+/* remove obstacles the keeper already cleared in a previous session */
+function pruneClearedDecor(){
+  if(!G.clearedDecor||!G.clearedDecor.length)return;
+  const set=new Set(G.clearedDecor);
+  World.decor=World.decor.filter(d=>{
+    const k=Math.floor(d.x/TILE)+','+Math.floor(d.y/TILE);
+    if(!set.has(k))return true;
+    const tx=Math.floor(d.x/TILE),ty=Math.floor(d.y/TILE);
+    if(tx>=0&&ty>=0&&tx<MAP_W&&ty<MAP_H)World.solid[ty*MAP_W+tx]=0;
+    return false; });
+}
 /* ---------- init ---------- */
 World.gen(); World.bakeGround(); initAtmo();
 // a few demo pips for the attract screen
@@ -3768,6 +3794,7 @@ $('saveFile').addEventListener('change',e=>{
 });
 const saved=SaveSys.load();
 if(saved)applySave(saved); else freshState();
+pruneClearedDecor();
 rebuildNpcs();
 AudioSys.setVol(G.settings.vol); AudioSys.setMute(G.settings.muted);
 showTitle(); UI.hud(); UI.logBadge(); G.dayT=1.25;
